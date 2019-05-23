@@ -1,0 +1,62 @@
+---
+- name: yum update
+  hosts: web db
+  gather_facts: false
+
+  tasks:
+    - name: list available packages
+      shell: yum update --assumeno
+      register: before_result
+      become: true
+      changed_when: false
+      failed_when: false
+
+    - name: before check
+      debug:
+        msg: "{{ before_result.stdout }}"
+
+    - block:
+      - name: update all packages
+        yum:
+          name: '*'
+          state: latest
+        become: true
+
+      - name: list available packages
+        shell: yum update --assumeno
+        register: after_result
+        become: true
+        changed_when: false
+
+      - name: after check
+        debug:
+          msg: "{{ after_result.stdout }}"
+
+      - name: connect check
+        ping:
+
+      - name: restart server
+        shell: sleep 2 && shutdown -r now
+        async: 1
+        poll: 0
+        become: true
+        ignore_errors: true
+
+      - name: wait for reboot
+        wait_for_connection:
+          delay: 30
+          timeout: 300
+
+      - name: connect check
+        ping:
+
+      - name: check uptime
+        shell: uptime
+        register: result
+        changed_when: false
+
+      - name: show previous shell stdout
+        debug:
+          msg: "{{ result.stdout }}"
+
+      when: "'No packages marked for update' not in before_result.stdout"
